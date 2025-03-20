@@ -1,4 +1,6 @@
-pandas==2.1.0
+pandas>=1.5.0
+numpy>=1.21.0
+openpyxl>=3.0.10
+tkinterdnd2>=0.3.0
 matplotlib==3.7.2
-seaborn==0.12.2
-openpyxl==3.1.2 
+seaborn==0.12.2 
