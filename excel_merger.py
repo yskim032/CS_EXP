@@ -25,9 +25,21 @@ class ExcelMergerApp:
         self.root.dnd_bind('<<Drop>>', self.handle_drop)
 
     def create_widgets(self):
+        # 메인 프레임을 좌우로 분할
+        main_frame = ttk.Frame(self.root)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # 왼쪽 프레임 (파일 목록)
+        left_frame = ttk.Frame(main_frame)
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        
+        # 오른쪽 프레임 (Summary)
+        right_frame = ttk.LabelFrame(main_frame, text="Summary", padding="5")
+        right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
+        
         # 파일 리스트 프레임
-        list_frame = ttk.LabelFrame(self.root, text="파일 목록", padding="5")
-        list_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        list_frame = ttk.LabelFrame(left_frame, text="파일 목록", padding="5")
+        list_frame.pack(fill=tk.BOTH, expand=True)
         
         # 파일 리스트박스
         self.listbox = tk.Listbox(list_frame, selectmode=tk.EXTENDED)
@@ -39,8 +51,8 @@ class ExcelMergerApp:
         self.listbox.configure(yscrollcommand=scrollbar.set)
         
         # 버튼 프레임
-        button_frame = ttk.Frame(self.root)
-        button_frame.pack(fill=tk.X, padx=5, pady=5)
+        button_frame = ttk.Frame(left_frame)
+        button_frame.pack(fill=tk.X, pady=5)
         
         # 파일 추가 버튼
         add_button = ttk.Button(button_frame, text="파일 추가", command=self.add_files)
@@ -54,18 +66,37 @@ class ExcelMergerApp:
         process_button = ttk.Button(button_frame, text="처리 시작", command=self.process_files)
         process_button.pack(side=tk.RIGHT, padx=5)
         
+        # Summary 정보 표시 레이블들
+        self.total_bkg_label = ttk.Label(right_frame, text="총 BKG NO 수: 0")
+        self.total_bkg_label.pack(fill=tk.X, pady=2)
+        
+        self.total_cntr_label = ttk.Label(right_frame, text="총 CNTR NO 수: 0")
+        self.total_cntr_label.pack(fill=tk.X, pady=2)
+        
+        self.total_files_label = ttk.Label(right_frame, text="처리된 파일 수: 0")
+        self.total_files_label.pack(fill=tk.X, pady=2)
+        
         # 상태 표시 레이블
-        self.status_label = ttk.Label(self.root, text="파일을 드래그 앤 드롭하거나 '파일 추가' 버튼을 클릭하세요")
-        self.status_label.pack(fill=tk.X, padx=5, pady=5)
+        self.status_label = ttk.Label(left_frame, text="파일을 드래그 앤 드롭하거나 '파일 추가' 버튼을 클릭하세요")
+        self.status_label.pack(fill=tk.X, pady=5)
 
     def handle_drop(self, event):
+        # 드래그 앤 드롭으로 받은 파일 경로 처리
         files = event.data.split()
         for file in files:
-            if file.lower().endswith(('.xls', '.xlsx')):
+            # 중괄호와 따옴표 제거
+            file = file.strip('{}"')
+            
+            # 파일 경로에서 파일명 추출
+            file_name = os.path.basename(file)
+            
+            # 파일명에서 확장자만 분리하여 확인
+            name, ext = os.path.splitext(file_name)
+            if ext.lower() == '.xlsx':
                 self.file_list.append(file)
-                self.listbox.insert(tk.END, os.path.basename(file))
+                self.listbox.insert(tk.END, file_name)
             else:
-                messagebox.showwarning("경고", f"엑셀 파일만 처리 가능합니다: {os.path.basename(file)}")
+                messagebox.showwarning("경고", f"엑셀 파일만 처리 가능합니다: {file_name}")
         self.update_status()
 
     def add_files(self):
@@ -107,6 +138,11 @@ class ExcelMergerApp:
             elif 'REMARK' in col_str:
                 remark_cols['normal'] = col
         return remark_cols
+
+    def update_summary(self, total_bkg, total_cntr, total_files):
+        self.total_bkg_label.config(text=f"총 BKG NO 수: {total_bkg}")
+        self.total_cntr_label.config(text=f"총 CNTR NO 수: {total_cntr}")
+        self.total_files_label.config(text=f"처리된 파일 수: {total_files}")
 
     def process_files(self):
         if not self.file_list:
@@ -202,34 +238,11 @@ class ExcelMergerApp:
                     else:
                         adjusted_width = (max_length + 2)
                     worksheet.column_dimensions[column[0].column_letter].width = adjusted_width
-                
-                # 요약 정보 시트
-                summary_data = {
-                    '항목': ['총 BKG NO 수', '총 CNTR NO 수', '처리된 파일 수'],
-                    '수량': [total_bkg, total_cntr, len(self.file_list)]
-                }
-                summary_df = pd.DataFrame(summary_data)
-                summary_df.to_excel(writer, index=False, sheet_name='Summary')
-                
-                # Summary 시트 열 너비 조정
-                summary_sheet = writer.sheets['Summary']
-                for column in summary_sheet.columns:
-                    max_length = 0
-                    column = [cell for cell in column]
-                    for cell in column:
-                        try:
-                            if len(str(cell.value)) > max_length:
-                                max_length = len(str(cell.value))
-                        except:
-                            pass
-                    adjusted_width = (max_length + 2)
-                    summary_sheet.column_dimensions[column[0].column_letter].width = adjusted_width
 
-            messagebox.showinfo("완료", f"처리가 완료되었습니다.\n\n"
-                                     f"총 BKG NO 수: {total_bkg}\n"
-                                     f"총 CNTR NO 수: {total_cntr}\n"
-                                     f"처리된 파일 수: {len(self.file_list)}\n\n"
-                                     f"결과 파일: {output_file}")
+            # Summary 정보 업데이트
+            self.update_summary(total_bkg, total_cntr, len(self.file_list))
+            
+            messagebox.showinfo("완료", f"처리가 완료되었습니다.\n\n결과 파일: {output_file}")
 
         except Exception as e:
             messagebox.showerror("오류", f"처리 중 오류가 발생했습니다:\n{str(e)}")
